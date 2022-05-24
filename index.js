@@ -47,6 +47,13 @@ async function run() {
             res.send(orders);
         })
 
+        app.get('/order/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: ObjectId(id) }
+            const order = await orderCollection.findOne(query);
+            res.send(order);
+        })
+
         app.delete('/order/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: ObjectId(id) };
@@ -69,5 +76,5 @@ app.get('/', (req, res) => {
 })
 
 app.listen(port, () => {
-    console.log(`Shizuka App listening on port ${port}`)
+    console.log(`Shizuka App is listening on port ${port}`)
 })
