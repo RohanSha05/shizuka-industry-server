@@ -65,7 +65,7 @@ run().catch(console.dir)
 console.log(uri)
 
 app.get('/', (req, res) => {
-    res.send('Hello from shizuka!')
+    res.send('Hello from shizuka industry!')
 })
 
 app.listen(port, () => {
