@@ -1,6 +1,7 @@
 const express = require('express')
 const cors = require('cors');
 const app = express();
+const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
 const port = process.env.PORT || 5000
@@ -13,12 +14,59 @@ const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster
 
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
+function verifyJWT(req, res, next) {
+    const authHeader = req.headers.authorization;
+    console.log(authHeader)
+    if (!authHeader) {
+        return res.status(401).send({ message: 'UnAuthorized Access' })
+    }
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, function (err, decoded) {
+        if (err) {
+            return res.status(403).send({ message: 'Forbidden access' })
+        }
+        req.decoded = decoded;
+        next();
+    })
+}
+
+
+
 async function run() {
     try {
         await client.connect();
 
         const partCollection = client.db('shizuka_industries').collection('parts');
         const orderCollection = client.db('shizuka_industries').collection('orders');
+        const paymentCollection = client.db('shizuka_industries').collection('payments');
+        const userCollection = client.db('shizuka_industries').collection('users');
+
+        app.put('/user/:email', async (req, res) => {
+            const email = req.params.email;
+            const user = req.body;
+            const filter = { email: email };
+            const options = { upsert: true };
+            const updateDoc = {
+                $set: user,
+            };
+            const result = await userCollection.updateOne(filter, updateDoc, options);
+            const token = jwt.sign({ email: email }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
+            res.send({ result, token });
+        })
+        app.put('/user/admin/:email', verifyJWT, async (req, res) => {
+            const email = req.params.email;
+            const filter = { email: email };
+            const updateDoc = {
+                $set: { role: 'admin' },
+            };
+            const result = await userCollection.updateOne(filter, updateDoc);
+            res.send(result);
+        })
+
+        app.get('/user', verifyJWT, async (req, res) => {
+            const users = await userCollection.find().toArray();
+            res.send(users)
+        })
 
         app.get('/part', async (req, res) => {
             const query = {};
@@ -40,12 +88,27 @@ async function run() {
             res.send(result);
         })
 
+        app.get('/orders', async (req, res) => {
 
-        app.get('/order', async (req, res) => {
-            const customer = req.query.customerEmail;
-            const query = { customer: customer };
-            const orders = await orderCollection.find(query).toArray();
-            res.send(orders);
+            const order = await orderCollection.find().toArray();
+            res.send(order)
+        })
+
+
+
+
+        app.get('/order', verifyJWT, async (req, res) => {
+            const customerEmail = req.query.customerEmail;
+            const decodedEmail = req.decoded.email;
+            if (customerEmail === decodedEmail) {
+                const query = { customerEmail: customerEmail };
+                const orders = await orderCollection.find(query).toArray();
+                return res.send(orders);
+            }
+            else {
+                return res.status(403).send({ message: 'forbidden access' });
+            }
+
         })
 
         app.get('/order/:id', async (req, res) => {
@@ -62,6 +125,24 @@ async function run() {
             res.send(result);
         })
 
+        app.patch('/order/:id', async (req, res) => {
+            const id = req.params.id;
+            const payment = req.body;
+            const filter = { _id: ObjectId(id) };
+            const updatedDoc = {
+                $set: {
+                    paid: true,
+                    transactionId: payment.transactionId
+                }
+            }
+
+            const result = await paymentCollection.insertOne(payment);
+            const updatedOrder = await orderCollection.updateOne(filter, updatedDoc)
+            res.send(updatedDoc);
+
+
+        })
+
         app.post('/create-payment-intent', async (req, res) => {
             const order = req.body;
             const price = order.price;
@@ -73,6 +154,7 @@ async function run() {
             });
             res.send({ clientSecret: paymentIntent.client_secret })
         });
+
 
     }
     finally {
