@@ -12,8 +12,7 @@ app.use(express.json());
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.kgl7e.mongodb.net/?retryWrites=true&w=majority`;
-console.log(process.env.DB_PASS);
-console.log(uri);
+
 
 const client = new MongoClient(uri, {
 	useNewUrlParser: true,
@@ -23,7 +22,6 @@ const client = new MongoClient(uri, {
 
 function verifyJWT(req, res, next) {
 	const authHeader = req.headers.authorization;
-	console.log(authHeader);
 	if (!authHeader) {
 		return res.status(401).send({ message: "UnAuthorized Access" });
 	}
@@ -39,7 +37,7 @@ function verifyJWT(req, res, next) {
 
 async function run() {
 	try {
-		await client.connect();
+		//await client.connect();
 
 		const partCollection = client.db("shizuka_industries").collection("parts");
 		const orderCollection = client
